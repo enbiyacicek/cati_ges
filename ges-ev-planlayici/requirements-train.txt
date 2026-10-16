@@ -1,0 +1,5 @@
+# Model eğitimi için (GPU'lu makinede / Colab'da). Web uygulamasına gerekmez.
+-r requirements.txt
+ultralytics>=8.3
+onnx>=1.16
+onnxslim
