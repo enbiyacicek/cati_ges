@@ -114,8 +114,8 @@ with c1:
 with c2:
     if st.button("🔍 Git", width="stretch") and query:
         try:
-            import osmnx as ox
-            lat, lon = ox.geocode(query)
+            from modules import osm_client
+            lat, lon = osm_client.geocode(query)
             ss.center, ss.zoom = [lat, lon], 16
         except Exception:
             st.warning("Yer bulunamadı.")
