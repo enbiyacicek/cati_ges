@@ -54,9 +54,14 @@ def to_excel(gdf, summary: dict, params: dict, weights_df, sens_df) -> bytes:
 # PDF
 # --------------------------------------------------------------------------- #
 def _font():
+    """Türkçe karakter (ı, ş, ğ, İ…) destekli yazı tipi. Önce matplotlib'in kendi
+    içinde taşıdığı DejaVu Sans denenir; böylece sunucuya font kurmak gerekmez."""
+    import matplotlib
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
+    mpl_fonts = Path(matplotlib.get_data_path()) / "fonts" / "ttf"
     for reg, bold in [
+        (str(mpl_fonts / "DejaVuSans.ttf"), str(mpl_fonts / "DejaVuSans-Bold.ttf")),
         ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
         (str(Path(__file__).parent.parent / "assets/DejaVuSans.ttf"),
          str(Path(__file__).parent.parent / "assets/DejaVuSans-Bold.ttf")),
