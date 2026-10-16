@@ -211,15 +211,11 @@ def detect_roofs_yolo(image: np.ndarray, transform, crs: str, model, overlap: in
 
 def detect_roofs_osm(polygon_4326):
     """OSM bina ayak izleri (yedek / test modu)."""
-    import geopandas as gpd
-    import osmnx as ox
+    from . import osm_client
 
-    try:
-        b = ox.features_from_polygon(polygon_4326, tags={"building": True})
-    except Exception as e:  # osmnx: boş sonuçta InsufficientResponseError
-        if "InsufficientResponse" in type(e).__name__:
-            return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
-        raise
+    b = osm_client.features(polygon_4326, {"building": True})
+    if b.empty:
+        return b
     b = b[b.geometry.geom_type.isin(["Polygon", "MultiPolygon"])].copy()
     keep = [c for c in ("building", "name", "building:levels", "height") if c in b.columns]
     b = b[keep + ["geometry"]].reset_index(drop=True)

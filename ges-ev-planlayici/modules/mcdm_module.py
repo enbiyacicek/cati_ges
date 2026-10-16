@@ -10,16 +10,15 @@ from .config import CONTEXT_BUFFER_M, MAIN_ROAD_CLASSES, POI_TAGS
 # --------------------------------------------------------------------------- #
 # OSM verisi
 # --------------------------------------------------------------------------- #
-def _features(polygon, tags):
-    import geopandas as gpd
-    import osmnx as ox
-    try:
-        f = ox.features_from_polygon(polygon, tags=tags)
-        return f[~f.geometry.is_empty].reset_index()
-    except Exception as e:
-        if "InsufficientResponse" in type(e).__name__:
-            return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
-        raise
+def _tag_match(df, key, values):
+    if key not in df.columns:
+        return np.zeros(len(df), bool)
+    col = df[key]
+    if values is True:
+        return col.notna().to_numpy()
+    if isinstance(values, str):
+        values = [values]
+    return col.isin(values).to_numpy()
 
 
 def buffered_polygon(polygon_4326, utm_crs, buffer_m=CONTEXT_BUFFER_M):
@@ -28,27 +27,41 @@ def buffered_polygon(polygon_4326, utm_crs, buffer_m=CONTEXT_BUFFER_M):
         .buffer(buffer_m).to_crs("EPSG:4326").iloc[0]
 
 
-def fetch_osm_context(polygon_4326, utm_crs, network: bool = False):
-    """Analiz alanı + tampon içindeki ana yol, otopark, şarj istasyonu ve POI'ler."""
+def fetch_osm_context(polygon_4326, utm_crs, network: bool = False, notes: list | None = None):
+    """Analiz alanı + tampon içindeki ana yol, otopark, şarj istasyonu ve POI'ler.
+    Sunucuyu yormamak için hepsi TEK Overpass isteğiyle çekilip yerelde ayrıştırılır."""
+    import geopandas as gpd
+    from . import osm_client
+
+    notes = notes if notes is not None else []
     big = buffered_polygon(polygon_4326, utm_crs)
-    ctx = {
-        "roads": _features(big, {"highway": MAIN_ROAD_CLASSES}),
-        "parking": _features(big, {"amenity": ["parking", "parking_entrance"]}),
-        "charging": _features(big, {"amenity": "charging_station"}),
-        "poi": _features(big, POI_TAGS),
-    }
-    for k, v in ctx.items():
-        if not v.empty:
-            v = v.to_crs(utm_crs)
-            if k == "roads":
-                v = v[v.geometry.geom_type.isin(["LineString", "MultiLineString"])]
-            ctx[k] = v
-    ctx["graph"] = None
+    parking_vals = ["parking", "parking_entrance"]
+    tags = {k: list(v) for k, v in POI_TAGS.items()}
+    tags["highway"] = MAIN_ROAD_CLASSES
+    tags["amenity"] = sorted(set(tags.get("amenity", []) + parking_vals + ["charging_station"]))
+    try:
+        allf = osm_client.features(big, tags)
+    except ConnectionError as e:
+        notes.append(f"{e} Yol/otopark/istasyon kriterleri hesaplanamadı (eşit kabul edildi).")
+        allf = gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+
+    empty = gpd.GeoDataFrame(geometry=[], crs=utm_crs)
+    ctx = {"roads": empty, "parking": empty, "charging": empty, "poi": empty, "graph": None}
+    if not allf.empty:
+        allf = allf.to_crs(utm_crs)
+        roads = allf[_tag_match(allf, "highway", MAIN_ROAD_CLASSES)]
+        ctx["roads"] = roads[roads.geometry.geom_type.isin(["LineString", "MultiLineString"])]
+        ctx["parking"] = allf[_tag_match(allf, "amenity", parking_vals)]
+        ctx["charging"] = allf[_tag_match(allf, "amenity", "charging_station")]
+        poi_mask = np.zeros(len(allf), bool)
+        for k, v in POI_TAGS.items():
+            poi_mask |= _tag_match(allf, k, v)
+        ctx["poi"] = allf[poi_mask]
+
     if network:
         import osmnx as ox
         try:
-            G = ox.graph_from_polygon(big, network_type="drive", simplify=True)
-            ctx["graph"] = ox.project_graph(G, to_crs=utm_crs)
+            ctx["graph"] = ox.project_graph(osm_client.graph(big), to_crs=utm_crs)
         except Exception:
             ctx["graph"] = None
     return ctx

@@ -67,7 +67,7 @@ def run_analysis(polygon_4326, p: dict, step=_noop, progress=_noop, uploaded_tif
 
     # 4) Mekânsal bağlam + TOPSIS
     step("Yollar, otoparklar, şarj istasyonları ve POI'ler OSM'den çekiliyor…")
-    ctx = mcdm_module.fetch_osm_context(polygon_4326, utm, network=p["use_network"])
+    ctx = mcdm_module.fetch_osm_context(polygon_4326, utm, network=p["use_network"], notes=notes)
     if p["use_network"] and ctx.get("graph") is None:
         notes.append("Yol ağı indirilemedi; Öklid mesafesi kullanıldı.")
     if len(ctx["charging"]) == 0:
