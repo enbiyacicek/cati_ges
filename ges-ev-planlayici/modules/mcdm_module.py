@@ -93,7 +93,7 @@ def nearest_distance(buildings_utm, target_gdf, cap: float | None = None, step: 
     bgeoms = shapely.segmentize(buildings_utm.geometry.values, step)
     coords, idx = shapely.get_coordinates(bgeoms, return_index=True)
     d, _ = tree.query(coords, k=1)
-    out = pd.Series(d).groupby(idx).min().reindex(range(n)).to_numpy()
+    out = np.array(pd.Series(d).groupby(idx).min().reindex(range(n)), dtype=float)  # yazılabilir kopya
     # Bina hedefle kesişiyorsa (ör. katlı otopark binası) mesafe 0
     tree_g = shapely.STRtree(np.asarray(target_gdf.geometry.values))
     hit, _ = tree_g.query(buildings_utm.geometry.values, predicate="intersects")
@@ -224,7 +224,7 @@ def rank(g, weights: dict, weight_mode: str = "manuel"):
     """weights: {sütun: ağırlık}. Ağırlığı 0 olan kriterler dışlanır."""
     used = [(c, n, b) for c, n, b in CRITERIA if weights.get(c, 0) > 0]
     cols = [c for c, _, _ in used]
-    X = g[cols].to_numpy(float)
+    X = np.array(g[cols], dtype=float)
     ben = [b for _, _, b in used]
     if weight_mode == "entropi":
         w = entropy_weights(X, ben)
